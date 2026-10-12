@@ -64,10 +64,10 @@ to the default; both are logged (`journalctl -u rdebugger-setup`).
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `STATION_NAME` | *(empty)* | Hostname and mDNS name (`<name>.local`). Lower-case letters, digits, `-`. Empty: `rdebugger-<last 8 hex digits of the CM4 serial>`. |
-| `TARGET` | `stm32h747` | `stm32h747` (dual core: GDB 3333 = M7, 3334 = M4), `stm32f767`, or `none` (OpenOCD never starts). |
+| `TARGET` | `stm32h747` | `stm32h747` (dual core: GDB 3333 = M7, 3334 = M4), `stm32f767`, `stm32f411`, `none` (OpenOCD never starts), or any `<name>` (`[a-z0-9_-]`) for which `/etc/rdebugger/openocd/<name>.cfg` exists. An unknown name without a config falls back to the default. |
 | `OPENOCD_RESET_CONFIG` | *(empty)* | OpenOCD `reset_config`. Empty = the target script's default: cores reset through SYSRESETREQ over SWD. With the probe's RESET (pin 15) wired to NRST: `srst_only srst_nogate` (hardware reset) or `srst_only srst_nogate connect_assert_srst` (connect under reset). |
 | `OPENOCD_BIND` | `0.0.0.0` | Address OpenOCD listens on. `127.0.0.1` = SSH tunnels only. |
-| `OPENOCD_ADAPTER_KHZ` | *(empty)* | SWD clock limit in kHz. Empty = the target scripts' clocks (H747: 1800 kHz, 4000 after reset-init; F767: 2000 kHz, 4000 after reset-init). Set e.g. `950` (1-4000 on an ST-LINK/V2) for long or noisy cables: it is applied at start and appended to the target scripts' reset-start, reset-init and reset-end handlers, so it holds through every reset. |
+| `OPENOCD_ADAPTER_KHZ` | *(empty)* | SWD clock limit in kHz. Empty = the target scripts' clocks (H747: 1800 kHz, 4000 after reset-init; F767 and F411: 2000 kHz requested (an ST-LINK runs 1800), 4000 after reset-init (8000 requested, capped at 4000)). Set e.g. `950` (1-4000 on an ST-LINK/V2) for long or noisy cables: it is applied at start and appended to the target scripts' reset-start, reset-init and reset-end handlers, so it holds through every reset. |
 | `OPENOCD_GDB_PORT` | `3333` | First GDB port; further cores get the next ports. |
 | `OPENOCD_TELNET_PORT` | `4444` | OpenOCD telnet console. |
 | `OPENOCD_TCL_PORT` | `6666` | OpenOCD Tcl RPC (scripted tools). |

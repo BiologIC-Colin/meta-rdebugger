@@ -25,14 +25,17 @@ cp -a "$ROOTFS" "$R"
 cp "$FILES/rdebugger-setup" "$R/usr/sbin/rdebugger-setup"
 chmod 0755 "$R/usr/sbin/rdebugger-setup"
 cp "$FILES/station.defaults" "$R/usr/lib/rdebugger/station.defaults"
+# The layer's current OpenOCD target configs (TARGET validation checks they exist).
+mkdir -p "$R/usr/share/rdebugger/openocd"
+cp "$LAYER"/recipes-devtools/rdebugger-debug/files/*.cfg "$R/usr/share/rdebugger/openocd/"
 
 # Fake CM4 serial number (/sys is not mounted in the chroot).
 mkdir -p "$R/sys/firmware/devicetree/base"
 printf '10000000a1b2c3d4\0' > "$R/sys/firmware/devicetree/base/serial-number"
 
-# Provisioning files as Windows would write them (CRLF).
+# Provisioning files as Windows would write them (UTF-8 BOM, CRLF).
 mkdir -p "$R/boot"
-printf '# bench test\r\nTARGET=stm32f767   # F7 board\r\nCAN_BITRATE="250000"  # J1939\r\nOPENOCD_ADAPTER_KHZ=950\r\nOPENOCD_RESET_CONFIG="srst_only srst_nogate" # NRST wired\r\nBOGUS=1\r\nDUT_UART_BAUD=fast\r\n' > "$R/boot/rdebugger.conf"
+printf '\357\273\277TARGET=stm32f767   # F7 board\r\n# bench test\r\nCAN_BITRATE="250000"  # J1939\r\nOPENOCD_ADAPTER_KHZ=950\r\nOPENOCD_RESET_CONFIG="srst_only srst_nogate" # NRST wired\r\nBOGUS=1\r\nDUT_UART_BAUD=fast\r\n' > "$R/boot/rdebugger.conf"
 printf 'ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\r\nupdate_config=1\r\ncountry=GB\r\nnetwork={\r\n ssid="lab"\r\n psk=0123\r\n}\r\n' > "$R/boot/wpa_supplicant.conf"
 printf 'ssh-ed25519 AAAAtest test@example\r\n' > "$R/boot/authorized_keys"
 
@@ -48,6 +51,15 @@ chroot "$R" /bin/sh -c 'cat /run/rdebugger/openocd.cfg' > "$WORK/openocd.cfg"
 chroot "$R" /bin/sh -c 'cat /run/rdebugger/ser2net.yaml' > "$WORK/ser2net.yaml"
 chroot "$R" /bin/sh -c 'cat /run/systemd/network/60-rdebugger-can.network' > "$WORK/can.network"
 chroot "$R" /bin/sh -c 'hostname' > "$WORK/hostname.kernel"
+cp "$R/etc/avahi/services/rdebugger.service" "$WORK/avahi.service"
+# A third target, then an unknown one without a config (falls back to the default).
+printf 'TARGET=stm32f411\r\n' > "$R/boot/rdebugger.conf"
+chroot "$R" /usr/sbin/rdebugger-setup boot
+chroot "$R" /bin/sh -c 'cat /run/rdebugger/openocd.cfg' > "$WORK/openocd-f411.cfg"
+cp "$R/etc/avahi/services/rdebugger.service" "$WORK/avahi-f411.service"
+printf 'TARGET=bogus\r\n' > "$R/boot/rdebugger.conf"
+chroot "$R" /usr/sbin/rdebugger-setup boot
+chroot "$R" /bin/sh -c 'cat /run/rdebugger/station.env' > "$WORK/station-bogus.env"
 EOF
 unshare --mount --uts --fork sh "$WORK/inner.sh"
 
@@ -78,7 +90,16 @@ expect "$WORK/openocd.cfg" 'foreach e {reset-start reset-init reset-end}' "OpenO
 expect "$WORK/openocd.cfg" 'reset_config srst_only srst_nogate$' "OpenOCD reset_config (quoted value, trailing comment)"
 expect "$WORK/can.network" 'BitRate=250000' "CAN bit rate (trailing comment ignored)"
 expect "$WORK/ser2net.yaml" 'serialdev,/dev/dut-uart,115200N81,local' "ser2net connector"
-expect "$R/etc/avahi/services/rdebugger.service" 'target=stm32f767' "avahi TXT record"
+expect "$WORK/avahi.service" 'target=stm32f767' "avahi TXT record"
+expect "$WORK/openocd-f411.cfg" 'source /usr/share/rdebugger/openocd/stm32f411.cfg' "OpenOCD target config (F411)"
+expect "$WORK/avahi-f411.service" 'target=stm32f411' "avahi TXT record (F411)"
+expect "$WORK/station-bogus.env" 'TARGET="stm32h747"' "unknown TARGET without a config falls back to the default"
+# busybox head/tail here have no legacy -N syntax: scripts must use -n N.
+if grep -rnE '(head|tail) -[0-9]' "$LAYER"/recipes-*/ >/dev/null; then
+    bad "scripts use head/tail -n N, not -N ($(grep -rlE '(head|tail) -[0-9]' "$LAYER"/recipes-*/ | tr '\n' ' '))"
+else
+    ok "scripts use head/tail -n N, not -N"
+fi
 
 echo
 [ "$fails" -eq 0 ] && echo "all tests passed" || echo "$fails test(s) failed"

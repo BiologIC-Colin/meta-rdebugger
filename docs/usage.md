@@ -19,7 +19,7 @@ I2C buses. `rdebugger-selftest` runs the automatic bring-up checks
 ## Debugging and flashing (OpenOCD + ST-LINK)
 
 OpenOCD starts by itself when the ST-LINK is plugged in and keeps retrying
-every 5 s while the target is unpowered or disconnected. The target is set by
+while the target is unpowered or disconnected (every 5 s, backing off to 60 s). The target is set by
 `TARGET` in station.conf.
 
 | Target | GDB port | Core |
@@ -27,6 +27,7 @@ every 5 s while the target is unpowered or disconnected. The target is set by
 | `stm32h747` | 3333 | Cortex-M7 (`stm32h7x.cpu0`) |
 | `stm32h747` | 3334 | Cortex-M4 (`stm32h7x.cpu1`) |
 | `stm32f767` | 3333 | Cortex-M7 |
+| `stm32f411` | 3333 | Cortex-M4 (`stm32f4x.cpu`) |
 
 Telnet console (OpenOCD commands): `telnet bench-07.local 4444`. Tcl RPC for
 scripts: port 6666 (each command ends with byte `0x1a`).
@@ -235,7 +236,7 @@ The CM4 device tree names the lines `GPIO0`..`GPIO27`, so they can be used by
 name:
 
 ```bash
-gpioinfo | head -40
+gpioinfo | head -n 40
 gpioget GPIO23
 gpioset -t0 GPIO17=1    # OUT1 high
 gpioset -t0 GPIO20=0    # green LED on

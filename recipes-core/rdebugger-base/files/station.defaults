@@ -9,7 +9,8 @@
 # Empty: rdebugger-<last 8 hex digits of the CM4 serial number>.
 STATION_NAME=""
 
-# Debug target behind the ST-LINK: stm32h747 | stm32f767 | none
+# Debug target behind the ST-LINK: stm32h747 | stm32f767 | stm32f411 | none,
+# or <name> with an OpenOCD config at /etc/rdebugger/openocd/<name>.cfg.
 TARGET="stm32h747"
 
 # OpenOCD (started automatically while an ST-LINK is plugged in).
@@ -20,6 +21,7 @@ TARGET="stm32h747"
 # when the firmware disables SWD or sleeps deeply).
 OPENOCD_RESET_CONFIG=""
 # GDB ports: <gdb> = first core (H747: Cortex-M7), <gdb>+1 = second (H747: Cortex-M4).
+# Single-core targets (F767, F411) use <gdb> only.
 OPENOCD_BIND="0.0.0.0"
 # SWD clock in kHz. Empty = the target script's (1800 kHz from reset, 4000
 # after reset-init clock setup). Set e.g. 950 for long or noisy cables.

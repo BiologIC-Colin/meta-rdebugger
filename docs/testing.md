@@ -54,14 +54,14 @@ pull-up on test pad P7 (GPIO19).
 | # | Check | Pass |
 | --- | --- | --- |
 | 3.1 | `ST: dmesg \| grep -i dwc2` | dwc2 in host mode, no errors |
-| 3.2 | `ST: lsusb` with ST-LINK and FTDI plugged into the USB-A ports | both listed (`0483:3748`, `0403:60xx`) |
+| 3.2 | `ST: lsusb` with ST-LINK and FTDI plugged into the USB-A ports | both listed (`0483:3748` ST-LINK/V2-ISOL or `0483:374b` Nucleo ST-LINK/V2-1, `0403:60xx`); `1366:xxxx` = J-Link OB firmware, not supported |
 
 ## 4. Debug (OpenOCD)
 
 | # | Check | Pass |
 | --- | --- | --- |
 | 4.1 | Plug in the ST-LINK; `ST: systemctl status rdebugger-openocd` | active (running), started by udev |
-| 4.2 | `ST: journalctl -u rdebugger-openocd -b` | `stlink` firmware version V2J24+ reported; target examined (`stm32h7x.cpu0` / `.cpu1`) |
+| 4.2 | `ST: journalctl -u rdebugger-openocd -b` | `stlink` firmware version V2J24+ reported; target examined (`stm32h7x.cpu0` / `.cpu1`; F411: `stm32f4x.cpu`), no "examination failed" |
 | 4.3 | `WS: telnet <station> 4444`, then `targets` | targets listed, state halted/running |
 | 4.4 | `WS: arm-none-eabi-gdb <elf> -ex "target extended-remote <station>:3333" -ex "monitor reset halt" -ex load` | load completes, verify ok |
 | 4.5 | Breakpoint on `main`, `continue` | stops at `main` |

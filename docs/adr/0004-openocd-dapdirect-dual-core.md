@@ -14,9 +14,12 @@ the HLA driver is deprecated and cannot debug more than one core.
 - Target configs in `/usr/share/rdebugger/openocd/`: `stm32h747.cfg` follows
   OpenOCD's `board/st_nucleo_h745zi.cfg` (stlink.cfg, `transport select swd`,
   `DUAL_CORE 1`, `USE_CTI 1`, `stm32h7x_dual_bank.cfg`); `stm32f767.cfg` uses
-  `target/stm32f7x.cfg`.
+  `target/stm32f7x.cfg`; `stm32f411.cfg` (added 2026-10-12 for a NUCLEO-F411RE
+  bench) follows `board/st_nucleo_f4.cfg` with `target/stm32f4x.cfg`.
+- `TARGET` accepts any name with a shipped or station-local `<name>.cfg`, so a
+  new chip needs only a config file.
 - `rdebugger-openocd.service` runs as a dynamic user in group plugdev,
-  `Restart=always`. A udev rule tags ST-LINK devices with a fixed systemd alias
+  `Restart=always` (5 s backing off to 60 s). A udev rule tags ST-LINK devices with a fixed systemd alias
   (`sys-subsystem-usb-devices-stlink.device`) and SYSTEMD_WANTS the service; the
   service BindsTo that device, so plugging the probe starts OpenOCD and
   unplugging stops it.

@@ -16,4 +16,8 @@ DynamicUser=yes
 # ST-LINK USB device nodes are group plugdev (70-rdebugger-usb.rules)
 SupplementaryGroups=plugdev
 Restart=always
+# 5 s, growing to 60 s while the error persists (target unpowered, wrong
+# TARGET), so a misconfigured station does not flood the persistent journal.
 RestartSec=5
+RestartSteps=5
+RestartMaxDelaySec=60

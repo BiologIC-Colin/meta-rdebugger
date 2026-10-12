@@ -13,7 +13,7 @@ starting point for our own carrier board.
 | Machine | `waveshare-cm4-poe-4g`: Raspberry Pi CM4 (eMMC, Wi-Fi) on the Waveshare CM4 PoE 4G Board |
 | Image | `rdebugger-image` |
 | Yocto | 6.0 "wrynose" (BitBake 2.18), meta-raspberrypi, meta-openembedded/meta-oe |
-| Targets | STM32H747XI (dual core), STM32F767ZI, through an ST-LINK/V2-ISOL |
+| Targets | STM32H747XI (dual core), STM32F767ZI, STM32F411RE (e.g. NUCLEO-F411RE), through an ST-LINK (V2-ISOL, or a Nucleo's on-board V2-1) |
 
 ## What the station does
 

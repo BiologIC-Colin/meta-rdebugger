@@ -36,8 +36,9 @@ touch (`docs/`). Decisions are in `docs/adr/`; follow them or propose a new ADR.
   changing either, check the image manifest: missing names are silently ignored.
 - Per-station settings belong in `station.defaults` + `rdebugger-setup`
   (KNOWN_KEYS, validation, generation) + `docs/provisioning.md`, never in the image.
-- Shell scripts run under busybox `ash` with only busybox applets (no
-  `install`, no `xxd`, busybox `ps`/`date`): POSIX sh only. Test with `dash -n`
+- Shell scripts: `/bin/sh` is bash in this image (gensio pulls it in), but the
+  utilities are busybox applets only (no `install`, no `xxd`, busybox
+  `ps`/`date`; `head`/`tail` need `-n N`, not `-N`). Write POSIX sh. Test with `dash -n`
   and `sudo tests/test-rdebugger-setup.sh <image rootfs>`, which runs
   rdebugger-setup on the image's own busybox (qemu-user chroot). Never test only
   against the host's GNU tools.

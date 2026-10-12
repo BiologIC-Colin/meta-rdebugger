@@ -63,13 +63,18 @@ commit() {
 }
 
 # --- provisioning: files dropped onto the FAT boot partition ---------------
+# Print $1 without CRs and without a leading UTF-8 byte order mark (Windows
+# editors write both).
+BOM=$(printf '\357\273\277')
+clean() { tr -d '\r' < "$1" | sed "1s/^$BOM//"; }
+
 import_boot_files() {
     [ -d "$BOOT" ] || return 0
     changed=0
 
     if [ -f "$BOOT/rdebugger.conf" ]; then
         if mkdir -p "$(dirname "$CONF")" &&
-           tr -d '\r' < "$BOOT/rdebugger.conf" > "$CONF.new" &&
+           clean "$BOOT/rdebugger.conf" > "$CONF.new" &&
            chmod 0644 "$CONF.new" && mv -f "$CONF.new" "$CONF"; then
             mv -f "$BOOT/rdebugger.conf" "$BOOT/rdebugger.conf.applied"
             log "imported station configuration from $BOOT/rdebugger.conf"
@@ -88,7 +93,7 @@ import_boot_files() {
                umask 077
                {
                    echo "ctrl_interface=/run/wpa_supplicant"
-                   tr -d '\r' < "$BOOT/wpa_supplicant.conf" | grep -v '^[[:space:]]*ctrl_interface='
+                   clean "$BOOT/wpa_supplicant.conf" | grep -v '^[[:space:]]*ctrl_interface='
                } > "$WPA_CONF.new"
            ) && chmod 0600 "$WPA_CONF.new" && mv -f "$WPA_CONF.new" "$WPA_CONF"; then
             # It holds a secret: never leave it on the FAT partition.
@@ -104,7 +109,7 @@ import_boot_files() {
         if mkdir -p /root/.ssh && chmod 0700 /root/.ssh && touch /root/.ssh/authorized_keys &&
            chmod 0600 /root/.ssh/authorized_keys; then
             # The loop runs in a subshell; its exit status is the pipeline's.
-            if tr -d '\r' < "$BOOT/authorized_keys" | while IFS= read -r key || [ -n "$key" ]; do
+            if clean "$BOOT/authorized_keys" | while IFS= read -r key || [ -n "$key" ]; do
                 case "$key" in ''|'#'*) continue ;; esac
                 grep -qxF "$key" /root/.ssh/authorized_keys ||
                     echo "$key" >> /root/.ssh/authorized_keys || exit 1
@@ -129,7 +134,7 @@ import_boot_files() {
 read_conf() {
     [ -f "$1" ] || return 0
     while IFS= read -r line || [ -n "$line" ]; do
-        line=$(printf '%s' "$line" | tr -d '\r')
+        line=$(printf '%s' "$line" | tr -d '\r' | sed "s/^$BOM//")
         case "$line" in ''|'#'*|[[:space:]]'#'*) continue ;; esac
         case "$line" in *=*) ;; *) continue ;; esac
         key=$(printf '%s' "${line%%=*}" | tr -d ' \t')
@@ -174,9 +179,14 @@ validate() {
         eval "v=\${$k-}"
         case "$v" in ''|*[!A-Za-z0-9._/:-]*) reset_key "$k" "$v" ;; esac
     done
+    # Any target with a shipped ($OPENOCD_CFG_DIR) or station-local
+    # ($OPENOCD_LOCAL_DIR) <name>.cfg. The name ends up in a file path and in
+    # the avahi XML, so only [a-z0-9_-] is accepted.
     case "$TARGET" in
-        stm32h747|stm32f767|none) ;;
-        *) reset_key TARGET "$TARGET" ;;
+        none) ;;
+        ''|*[!a-z0-9_-]*) reset_key TARGET "$TARGET" ;;
+        *) [ -f "$OPENOCD_LOCAL_DIR/$TARGET.cfg" ] || [ -f "$OPENOCD_CFG_DIR/$TARGET.cfg" ] ||
+               reset_key TARGET "$TARGET" ;;
     esac
     case "$OPENOCD_RESET_CONFIG" in
         *[!a-z_\ ]*) reset_key OPENOCD_RESET_CONFIG "$OPENOCD_RESET_CONFIG" ;;

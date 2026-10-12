@@ -46,7 +46,7 @@ ip -4 addr show eth0 2>/dev/null | grep -q 'inet ' \
     && pass "eth0 has IPv4" "$(ip -4 -brief addr show eth0 | awk '{print $3}')" \
     || fail "eth0 has IPv4" "no address"
 ip route show default 2>/dev/null | grep -q 'dev eth0' && pass "default route via eth0" "" \
-    || info "default route" "$(ip route show default | head -1)"
+    || info "default route" "$(ip route show default | head -n 1)"
 check "avahi-daemon active" "" systemctl -q is-active avahi-daemon
 check "sshd listening" "" systemctl -q is-active sshd.socket
 [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = yes ] \
@@ -59,23 +59,39 @@ fi
 
 # --- 3. USB host --------------------------------------------------------------------
 dmesg 2>/dev/null | grep -qi 'dwc2.*DWC OTG Controller' && pass "dwc2 host controller" "" \
-    || info "dwc2" "$(dmesg 2>/dev/null | grep -i dwc2 | tail -1)"
+    || info "dwc2" "$(dmesg 2>/dev/null | grep -i dwc2 | tail -n 1)"
 check "board USB hub enumerated" "no external hub - USB SLAVE cable connected? dwc2 host mode?" \
     sh -c 'lsusb | grep -v "root hub" | grep -qi hub'
 
 # --- 4. debug probe -----------------------------------------------------------------
 if lsusb -d 0483: >/dev/null 2>&1; then
-    pass "ST-LINK present" "$(lsusb -d 0483: | head -1 | cut -d' ' -f6-)"
+    pass "ST-LINK present" "$(lsusb -d 0483: | head -n 1 | cut -d' ' -f6-)"
     if [ "${TARGET:-none}" = none ]; then
         skip "OpenOCD running" "TARGET=none"
     else
         check "OpenOCD running" "journalctl -u rdebugger-openocd" systemctl -q is-active rdebugger-openocd
-        fw=$(journalctl -u rdebugger-openocd -b --no-pager 2>/dev/null | grep -o 'STLINK V[0-9]J[0-9]*' | tail -1)
+        # Only the latest OpenOCD run (it restarts while the target is absent).
+        oc=$(journalctl -u rdebugger-openocd -b --no-pager -o cat 2>/dev/null |
+             awk '/Open On-Chip Debugger/ {buf = ""} {buf = buf $0 "\n"} END {printf "%s", buf}')
+        fw=$(printf '%s' "$oc" | grep -o 'STLINK V[0-9]J[0-9]*' | tail -n 1)
         info "ST-LINK firmware" "${fw:-unknown}"
+        if printf '%s' "$oc" | grep -qi 'only supports deprecated HLA'; then
+            fail "ST-LINK firmware V2J24+" "${fw:-old} - upgrade it (STSW-LINK007 / STM32CubeProgrammer)"
+        fi
+        # A wrong TARGET still starts OpenOCD: check the cores were examined.
+        if printf '%s' "$oc" | grep -qi 'examination failed'; then
+            fail "target examined ($TARGET)" "$(printf '%s' "$oc" | grep -i 'examination failed' | tail -n 1)"
+        elif printf '%s' "$oc" | grep -q 'processor detected'; then
+            pass "target examined ($TARGET)" "$(printf '%s' "$oc" | grep -o '\[[^]]*\] Cortex-M[0-9A-Za-z]* r[0-9]*p[0-9]* processor detected' | tr '\n' ' ')"
+        else
+            fail "target examined ($TARGET)" "no core detected - target powered and wired? journalctl -u rdebugger-openocd"
+        fi
         port=${OPENOCD_GDB_PORT:-3333}
         if ss -ltn 2>/dev/null | grep -q ":$port "; then pass "GDB port $port listening" ""
         else fail "GDB port $port listening" "target not examined? journalctl -u rdebugger-openocd"; fi
     fi
+elif lsusb -d 1366: >/dev/null 2>&1; then
+    fail "ST-LINK present" "SEGGER J-Link found ($(lsusb -d 1366: | head -n 1 | cut -d' ' -f6-)): not supported by this image's OpenOCD - restore ST-LINK firmware (SEGGER STLinkReflash) on a PC"
 else
     skip "ST-LINK" "not plugged in"
 fi
@@ -93,11 +109,11 @@ check "ser2net raw port open" "" sh -c "ss -ltn | grep -q ':${SER2NET_RAW_PORT:-
 if [ -e "/sys/class/net/$CAN_IF" ]; then
     pass "$CAN_IF present" ""
     details=$(ip -details link show "$CAN_IF")
-    br=$(echo "$details" | sed -n 's/.*bitrate \([0-9]*\).*/\1/p' | head -1)
+    br=$(echo "$details" | sed -n 's/.*bitrate \([0-9]*\).*/\1/p' | head -n 1)
     [ "$br" = "${CAN_BITRATE:-500000}" ] && pass "$CAN_IF bit rate" "$br" \
         || fail "$CAN_IF bit rate" "is ${br:-unset}, want ${CAN_BITRATE:-500000}"
     echo "$details" | grep -q 'state UP\|,UP' && pass "$CAN_IF up" "" || fail "$CAN_IF up" "networkctl status $CAN_IF"
-    info "$CAN_IF controller state" "$(echo "$details" | sed -n 's/.*can state \([A-Z-]*\).*/\1/p' | head -1)"
+    info "$CAN_IF controller state" "$(echo "$details" | sed -n 's/.*can state \([A-Z-]*\).*/\1/p' | head -n 1)"
 else
     fail "$CAN_IF present" "dmesg | grep -i mcp251x"
 fi

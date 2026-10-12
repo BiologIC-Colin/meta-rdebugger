@@ -42,6 +42,10 @@ done
 section "Debug probe and DUT UART"
 if lsusb -d 0483: >/dev/null 2>&1; then
     lsusb -d 0483: | sed 's/^/  /'
+elif lsusb -d 1366: >/dev/null 2>&1; then
+    lsusb -d 1366: | sed 's/^/  /'
+    echo "  SEGGER J-Link firmware: not supported by this image's OpenOCD;"
+    echo "  restore the ST-LINK firmware with SEGGER STLinkReflash on a PC"
 else
     echo "  no ST-LINK (0483:*) on USB"
 fi

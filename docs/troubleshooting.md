@@ -32,7 +32,9 @@ Start with `rdebugger-status` and `journalctl -b -p warning`. Service logs:
 | --- | --- | --- |
 | `lsusb` shows nothing on the USB-A ports | DWC2 not in host mode, or the USB SLAVE port is connected | Check `dtoverlay=dwc2,dr_mode=host` in `/boot/config.txt`; unplug USB SLAVE |
 | `rdebugger-openocd` inactive with the probe plugged in | `TARGET=none`, or the udev rule did not fire | `rdebugger-setup show`; `udevadm info /dev/bus/usb/...`; `systemctl status sys-subsystem-usb-devices-stlink.device` |
-| OpenOCD: "firmware ... only supports deprecated HLA" | ST-LINK firmware older than V2J24 | Upgrade the probe firmware on a PC |
+| OpenOCD: "firmware ... only supports deprecated HLA" | ST-LINK firmware older than V2J24 | Upgrade the probe firmware on a PC (STSW-LINK007 / STM32CubeProgrammer). Stopgap for single-core targets: a station-local `/etc/rdebugger/openocd/<target>.cfg` that sources `interface/stlink-hla.cfg` instead of `interface/stlink.cfg`, then `rdebugger-setup apply` |
+| `lsusb` shows `1366:xxxx` (SEGGER) instead of an ST-LINK | Nucleo ST-LINK converted to J-Link OB; no J-Link driver in this OpenOCD | Restore the ST-LINK firmware with SEGGER STLinkReflash on a Windows PC, then update it |
+| Selftest "target examined" FAILs while OpenOCD runs | Wrong `TARGET` for the chip (e.g. stm32h747 on an F411), or target not powered | `rdebugger-setup show`; set `TARGET`; `journalctl -u rdebugger-openocd -b` |
 | OpenOCD: M4 (cpu1) examine fails, AP errors | Firmware older than V2J29/J32, or the M4 is not booted | Upgrade firmware; check the BCM4 option bit / M7 app |
 | OpenOCD: "init mode failed (unable to connect to the target)", restarting every 5 s | Target unpowered, VAPP (pin 1) not connected, wiring | Power the target, connect VAPP, check SWDIO/SWCLK/GND |
 | OpenOCD: WAIT/FAULT, DP errors | SWD too fast for the cable/isolator | `OPENOCD_ADAPTER_KHZ="950"`, `rdebugger-setup apply` |

@@ -137,6 +137,22 @@ DC input.
 - Max SWD clock 4000 kHz; the target scripts start at 1800 kHz and raise it
   after reset-init. Lower it for long ribbons if you see WAIT/FAULT errors.
 
+### Alternative: a Nucleo board's on-board ST-LINK/V2-1
+
+- USB `0483:374b` (covered by the udev rule). The Nucleo-64's ST-LINK NRST is
+  wired to the target's NRST, so `OPENOCD_RESET_CONFIG="srst_only srst_nogate"`
+  works. Firmware V2J24 or later applies here too.
+- It also has a virtual COM port (`/dev/ttyACM0`, cdc-acm is in the image) and
+  a mass-storage drive. On Nucleo-64 boards (UM1724) the target's USART2
+  (PA2/PA3) goes to that VCP by default and the Arduino D0/D1 pins are **not**
+  connected (SB62/SB63 open). So an FTDI on D0/D1 sees nothing from USART2:
+  wire it to the USART the firmware uses, or set
+  `DUT_UART_DEVICE="/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_<serial>-if02"`.
+- Some Nucleo ST-LINKs have been converted to SEGGER J-Link OB (USB vendor
+  `1366`). This image's OpenOCD has no J-Link driver: `rdebugger-status` and
+  `rdebugger-selftest` report it. Restore the ST-LINK firmware on a Windows PC
+  with SEGGER's STLinkReflash, then update it with STSW-LINK007.
+
 ## DUT UART: FTDI USB-UART
 
 Any FTDI (FT232R/FT232H/FT2232/FT4232) on a USB-A port: the first port becomes
