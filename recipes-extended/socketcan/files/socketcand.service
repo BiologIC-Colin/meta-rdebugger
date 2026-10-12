@@ -1,0 +1,23 @@
+[Unit]
+Description=socketcand - CAN over TCP (python-can "socketcand" interface)
+Documentation=https://github.com/linux-can/socketcand
+After=rdebugger-setup.service systemd-networkd.service
+ConditionPathExists=/run/rdebugger/station.env
+
+[Service]
+EnvironmentFile=/run/rdebugger/station.env
+# socketcand can only bind TCP to the one IPv4 address an interface has when it
+# starts. Instead it listens on a local AF_UNIX socket, and
+# socketcand-proxy.socket serves TCP 29536 on every address (IPv4 and IPv6,
+# eth0 and wlan0) and forwards to it. -n: no UDP discovery beacon (stations
+# are advertised by avahi as _rdebugger._tcp instead).
+RuntimeDirectory=socketcand
+RuntimeDirectoryMode=0755
+UMask=0000
+ExecStart=/usr/sbin/socketcand -i ${CAN_INTERFACE} -u /run/socketcand/socketcand.sock -n
+DynamicUser=yes
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

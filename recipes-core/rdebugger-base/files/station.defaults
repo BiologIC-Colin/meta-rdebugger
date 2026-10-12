@@ -1,0 +1,41 @@
+# rdebugger station defaults - shipped with the image, do not edit.
+#
+# Override any of these in /etc/rdebugger/station.conf (same KEY="value"
+# syntax, comments with #), or put a file called rdebugger.conf on the boot
+# partition: it is imported into /etc/rdebugger/station.conf at the next boot.
+# Apply a change at runtime with:  rdebugger-setup apply
+
+# Hostname (and mDNS name <name>.local). Lower-case letters, digits and '-'.
+# Empty: rdebugger-<last 8 hex digits of the CM4 serial number>.
+STATION_NAME=""
+
+# Debug target behind the ST-LINK: stm32h747 | stm32f767 | none
+TARGET="stm32h747"
+
+# OpenOCD (started automatically while an ST-LINK is plugged in).
+# Reset: empty = the target script's default (cores reset through SYSRESETREQ
+# over SWD; works with SWDIO/SWCLK only). If the probe's RESET (pin 15) is
+# wired to the target's NRST: "srst_only srst_nogate" (hardware reset), or
+# "srst_only srst_nogate connect_assert_srst" to connect under reset (needed
+# when the firmware disables SWD or sleeps deeply).
+OPENOCD_RESET_CONFIG=""
+# GDB ports: <gdb> = first core (H747: Cortex-M7), <gdb>+1 = second (H747: Cortex-M4).
+OPENOCD_BIND="0.0.0.0"
+# SWD clock in kHz. Empty = the target script's (1800 kHz from reset, 4000
+# after reset-init clock setup). Set e.g. 950 for long or noisy cables.
+OPENOCD_ADAPTER_KHZ=""
+OPENOCD_GDB_PORT="3333"
+OPENOCD_TELNET_PORT="4444"
+OPENOCD_TCL_PORT="6666"
+
+# DUT UART (FTDI USB-UART -> /dev/dut-uart) shared on the network by ser2net.
+DUT_UART_DEVICE="/dev/dut-uart"
+DUT_UART_BAUD="115200"
+SER2NET_RAW_PORT="3000"
+SER2NET_RFC2217_PORT="3001"
+
+# CAN (on-board MCP2515). Bit rate in bit/s. socketcand serves this interface
+# on TCP 29536 (all addresses; python-can "socketcand" interface).
+CAN_INTERFACE="can0"
+CAN_BITRATE="500000"
+CAN_RESTART_MS="100"

@@ -1,0 +1,24 @@
+# rdebugger: wired PoE Ethernet - the station's primary link.
+# Sorts before OE's 80-wired.network, so this file wins for eth0.
+[Match]
+Name=eth0
+
+[Network]
+DHCP=yes
+# IPv6 link-local always; IPv4 link-local (169.254.x.x) only when DHCP fails,
+# so a laptop cabled straight to the station still reaches <station>.local.
+LinkLocalAddressing=yes
+# avahi-daemon does mDNS; keep systemd-networkd/resolved out of it.
+MulticastDNS=no
+LLMNR=no
+
+[DHCPv4]
+# Prefer eth0 over Wi-Fi for the default route.
+RouteMetric=10
+ClientIdentifier=mac
+# The station keeps its own (provisioned) hostname.
+UseHostname=no
+SendHostname=yes
+
+[IPv6AcceptRA]
+RouteMetric=10

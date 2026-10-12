@@ -1,0 +1,19 @@
+[Unit]
+Description=OpenOCD debug server for the station's ST-LINK
+Documentation=https://openocd.org/doc/html/index.html
+# Started by udev (70-rdebugger-usb.rules) when an ST-LINK is plugged in and
+# stopped when it is unplugged. Target and ports: /etc/rdebugger/station.conf.
+BindsTo=sys-subsystem-usb-devices-stlink.device
+After=sys-subsystem-usb-devices-stlink.device rdebugger-setup.service network.target
+# Absent when TARGET=none.
+ConditionPathExists=/run/rdebugger/openocd.cfg
+# Keep retrying while the target is unpowered or not connected.
+StartLimitIntervalSec=0
+
+[Service]
+ExecStart=/usr/bin/openocd -f /run/rdebugger/openocd.cfg
+DynamicUser=yes
+# ST-LINK USB device nodes are group plugdev (70-rdebugger-usb.rules)
+SupplementaryGroups=plugdev
+Restart=always
+RestartSec=5

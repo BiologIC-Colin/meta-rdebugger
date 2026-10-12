@@ -1,0 +1,20 @@
+[Unit]
+Description=rdebugger station setup (provisioning, hostname, runtime config)
+DefaultDependencies=no
+# /boot (FAT, provisioning files) and a writable /etc are needed.
+RequiresMountsFor=/boot /etc /var
+After=local-fs.target systemd-remount-fs.service
+# Everything that consumes the generated configuration starts afterwards.
+Before=network-pre.target systemd-networkd.service wpa_supplicant-nl80211@wlan0.service
+Before=avahi-daemon.service sshd.socket ser2net.service socketcand.service rdebugger-openocd.service
+Before=shutdown.target
+Wants=network-pre.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/rdebugger-setup boot
+
+[Install]
+WantedBy=multi-user.target

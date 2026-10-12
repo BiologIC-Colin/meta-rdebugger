@@ -1,0 +1,79 @@
+#!/bin/sh
+# rdebugger-status - one-screen health report of the station.
+
+# "." on a missing file would end the script, so check first.
+if [ -r /run/rdebugger/station.env ]; then
+    . /run/rdebugger/station.env
+else
+    echo "WARNING: /run/rdebugger/station.env missing - see journalctl -u rdebugger-setup -b"
+fi
+
+section() { printf '\n== %s\n' "$1"; }
+state() { printf '  %-28s %s\n' "$1" "$(systemctl is-active "$1" 2>/dev/null)"; }
+
+section "Station"
+[ -r /etc/os-release ] && . /etc/os-release
+printf '  %-28s %s\n' "hostname" "$(hostname)"
+printf '  %-28s %s\n' "release" "${PRETTY_NAME:-?}"
+printf '  %-28s %s\n' "kernel" "$(uname -r)"
+printf '  %-28s %s\n' "model" "$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)"
+printf '  %-28s %s\n' "serial" "$(tr -d '\0' < /proc/device-tree/serial-number 2>/dev/null)"
+printf '  %-28s %s\n' "uptime" "$(uptime)"
+printf '  %-28s %s\n' "target" "${TARGET:-?}"
+
+section "Network"
+ip -brief address show | sed 's/^/  /'
+printf '  %-28s %s\n' "time synchronised" "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)"
+printf '  %-28s %s\n' "system time (UTC)" "$(date -u '+%Y-%m-%d %H:%M:%S')"
+if [ -r /sys/class/rtc/rtc0/time ]; then
+    printf '  %-28s %s %s (%s)\n' "RTC rtc0 (UTC)" "$(cat /sys/class/rtc/rtc0/date)" \
+        "$(cat /sys/class/rtc/rtc0/time)" "$(cat /sys/class/rtc/rtc0/name)"
+else
+    printf '  %-28s %s\n' "RTC" "not present"
+fi
+
+section "Services"
+for u in rdebugger-setup.service systemd-networkd.service avahi-daemon.service sshd.socket \
+         ser2net.service socketcand.service socketcand-proxy.socket rdebugger-openocd.service \
+         wpa_supplicant-nl80211@wlan0.service; do
+    state "$u"
+done
+
+section "Debug probe and DUT UART"
+if lsusb -d 0483: >/dev/null 2>&1; then
+    lsusb -d 0483: | sed 's/^/  /'
+else
+    echo "  no ST-LINK (0483:*) on USB"
+fi
+if [ -e "${DUT_UART_DEVICE:-/dev/dut-uart}" ]; then
+    printf '  %-28s -> %s\n' "${DUT_UART_DEVICE:-/dev/dut-uart}" "$(readlink -f "${DUT_UART_DEVICE:-/dev/dut-uart}")"
+else
+    echo "  no DUT UART (${DUT_UART_DEVICE:-/dev/dut-uart}) - FTDI not plugged in?"
+fi
+ls /dev/serial/by-id/ 2>/dev/null | sed 's/^/  by-id: /'
+
+section "CAN"
+if [ -e "/sys/class/net/${CAN_INTERFACE:-can0}" ]; then
+    ip -details -statistics link show "${CAN_INTERFACE:-can0}" | sed 's/^/  /'
+else
+    echo "  ${CAN_INTERFACE:-can0} not present (MCP2515 not detected?)"
+fi
+
+section "1-Wire"
+found=0
+for d in /sys/bus/w1/devices/*; do
+    [ -e "$d" ] || continue
+    case "$(basename "$d")" in w1_bus_master*) continue ;; esac
+    printf '  %s\n' "$(basename "$d")"
+    found=1
+done
+[ -d /sys/bus/w1/devices ] || echo "  no 1-Wire master (w1-gpio not loaded?)"
+[ -d /sys/bus/w1/devices ] && [ "$found" = 0 ] && echo "  master present, no slaves found"
+
+section "I2C buses"
+if ls /dev/i2c-* >/dev/null 2>&1; then
+    ls /dev/i2c-* | sed 's/^/  /'
+else
+    echo "  none"
+fi
+echo

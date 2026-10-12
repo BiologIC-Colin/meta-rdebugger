@@ -1,0 +1,138 @@
+#!/bin/sh
+# rdebugger-selftest - non-interactive bring-up checks (docs/testing.md).
+# Prints one line per check: PASS / FAIL / SKIP / INFO, and exits non-zero if
+# any check failed. Checks that need external equipment (a CAN partner, a
+# 1-Wire device, the ST-LINK or FTDI plugged in) are SKIPped when it is absent.
+
+# "." on a missing file would end the script, so check first.
+if [ -r /run/rdebugger/station.env ]; then
+    . /run/rdebugger/station.env
+    env_ok=1
+else
+    env_ok=0
+fi
+CAN_IF=${CAN_INTERFACE:-can0}
+fails=0
+
+pass() { printf 'PASS  %-34s %s\n' "$1" "$2"; }
+fail() { printf 'FAIL  %-34s %s\n' "$1" "$2"; fails=$((fails + 1)); }
+skip() { printf 'SKIP  %-34s %s\n' "$1" "$2"; }
+info() { printf 'INFO  %-34s %s\n' "$1" "$2"; }
+check() {   # check <name> <detail-on-fail> <command...>
+    name=$1 detail=$2
+    shift 2
+    if "$@" >/dev/null 2>&1; then pass "$name" ""; else fail "$name" "$detail"; fi
+}
+
+# --- 1. boot and identity ---------------------------------------------------------
+[ "$env_ok" = 1 ] && pass "station.env generated" "" || fail "station.env generated" "journalctl -u rdebugger-setup -b"
+[ -r /etc/os-release ] && . /etc/os-release
+[ "${ID:-}" = rdebugger ] && pass "os-release" "$PRETTY_NAME" || fail "os-release" "ID=${ID:-?}"
+failed=$(systemctl --failed --no-legend --plain 2>/dev/null | awk '{print $1}' | tr '\n' ' ')
+[ -z "$failed" ] && pass "no failed units" "" || fail "no failed units" "$failed"
+check "rdebugger-setup ran" "journalctl -u rdebugger-setup" systemctl -q is-active rdebugger-setup.service
+check "hostname set" "/etc/hostname empty" test -s /etc/hostname
+info "hostname" "$(hostname)"
+root_kb=$(df -k / | awk 'NR==2 {print $2}')
+if [ "${root_kb:-0}" -gt 2000000 ]; then pass "root fs grown" "$((root_kb / 1024)) MiB"
+else fail "root fs grown" "$((root_kb / 1024)) MiB - journalctl -u rdebugger-growfs"; fi
+grep -q 'Compute Module 4' /proc/device-tree/model 2>/dev/null \
+    && pass "board is a CM4" "" || fail "board is a CM4" "$(tr -d '\0' < /proc/device-tree/model)"
+grep -q 'root=/dev/mmcblk0p2' /proc/cmdline && pass "root on eMMC" "" || fail "root on eMMC" "$(cat /proc/cmdline)"
+
+# --- 2. network ---------------------------------------------------------------------
+check "systemd-networkd active" "" systemctl -q is-active systemd-networkd
+ip -4 addr show eth0 2>/dev/null | grep -q 'inet ' \
+    && pass "eth0 has IPv4" "$(ip -4 -brief addr show eth0 | awk '{print $3}')" \
+    || fail "eth0 has IPv4" "no address"
+ip route show default 2>/dev/null | grep -q 'dev eth0' && pass "default route via eth0" "" \
+    || info "default route" "$(ip route show default | head -1)"
+check "avahi-daemon active" "" systemctl -q is-active avahi-daemon
+check "sshd listening" "" systemctl -q is-active sshd.socket
+[ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = yes ] \
+    && pass "time synchronised (NTP)" "" || fail "time synchronised (NTP)" "timedatectl"
+if [ -f /etc/wpa_supplicant/wpa_supplicant-nl80211-wlan0.conf ]; then
+    check "wpa_supplicant@wlan0 active" "" systemctl -q is-active wpa_supplicant-nl80211@wlan0
+else
+    skip "Wi-Fi" "not provisioned"
+fi
+
+# --- 3. USB host --------------------------------------------------------------------
+dmesg 2>/dev/null | grep -qi 'dwc2.*DWC OTG Controller' && pass "dwc2 host controller" "" \
+    || info "dwc2" "$(dmesg 2>/dev/null | grep -i dwc2 | tail -1)"
+check "board USB hub enumerated" "no external hub - USB SLAVE cable connected? dwc2 host mode?" \
+    sh -c 'lsusb | grep -v "root hub" | grep -qi hub'
+
+# --- 4. debug probe -----------------------------------------------------------------
+if lsusb -d 0483: >/dev/null 2>&1; then
+    pass "ST-LINK present" "$(lsusb -d 0483: | head -1 | cut -d' ' -f6-)"
+    if [ "${TARGET:-none}" = none ]; then
+        skip "OpenOCD running" "TARGET=none"
+    else
+        check "OpenOCD running" "journalctl -u rdebugger-openocd" systemctl -q is-active rdebugger-openocd
+        fw=$(journalctl -u rdebugger-openocd -b --no-pager 2>/dev/null | grep -o 'STLINK V[0-9]J[0-9]*' | tail -1)
+        info "ST-LINK firmware" "${fw:-unknown}"
+        port=${OPENOCD_GDB_PORT:-3333}
+        if ss -ltn 2>/dev/null | grep -q ":$port "; then pass "GDB port $port listening" ""
+        else fail "GDB port $port listening" "target not examined? journalctl -u rdebugger-openocd"; fi
+    fi
+else
+    skip "ST-LINK" "not plugged in"
+fi
+
+# --- 5. DUT UART ----------------------------------------------------------------------
+if [ -e "${DUT_UART_DEVICE:-/dev/dut-uart}" ]; then
+    pass "DUT UART present" "$(readlink -f "${DUT_UART_DEVICE:-/dev/dut-uart}")"
+else
+    skip "DUT UART" "no ${DUT_UART_DEVICE:-/dev/dut-uart} (FTDI not plugged in)"
+fi
+check "ser2net active" "journalctl -u ser2net" systemctl -q is-active ser2net
+check "ser2net raw port open" "" sh -c "ss -ltn | grep -q ':${SER2NET_RAW_PORT:-3000} '"
+
+# --- 6. CAN -----------------------------------------------------------------------------
+if [ -e "/sys/class/net/$CAN_IF" ]; then
+    pass "$CAN_IF present" ""
+    details=$(ip -details link show "$CAN_IF")
+    br=$(echo "$details" | sed -n 's/.*bitrate \([0-9]*\).*/\1/p' | head -1)
+    [ "$br" = "${CAN_BITRATE:-500000}" ] && pass "$CAN_IF bit rate" "$br" \
+        || fail "$CAN_IF bit rate" "is ${br:-unset}, want ${CAN_BITRATE:-500000}"
+    echo "$details" | grep -q 'state UP\|,UP' && pass "$CAN_IF up" "" || fail "$CAN_IF up" "networkctl status $CAN_IF"
+    info "$CAN_IF controller state" "$(echo "$details" | sed -n 's/.*can state \([A-Z-]*\).*/\1/p' | head -1)"
+else
+    fail "$CAN_IF present" "dmesg | grep -i mcp251x"
+fi
+check "socketcand active" "journalctl -u socketcand" systemctl -q is-active socketcand
+check "socketcand TCP 29536 listening" "systemctl status socketcand-proxy.socket" \
+    sh -c "ss -ltn | grep -q ':29536 '"
+
+# --- 7. 1-Wire ----------------------------------------------------------------------------
+if [ -d /sys/bus/w1/devices/w1_bus_master1 ]; then
+    pass "1-Wire master" "w1_bus_master1"
+    slaves=$(cat /sys/bus/w1/devices/w1_bus_master1/w1_master_slaves 2>/dev/null | grep -v 'not found' | tr '\n' ' ')
+    [ -n "$slaves" ] && info "1-Wire devices" "$slaves" || skip "1-Wire devices" "none on the bus"
+else
+    fail "1-Wire master" "grep w1-gpio /boot/config.txt; lsmod | grep w1"
+fi
+
+# --- 8. RTC, watchdog, I2C ----------------------------------------------------------------
+if [ -r /sys/class/rtc/rtc0/name ]; then
+    pass "RTC rtc0" "$(cat /sys/class/rtc/rtc0/name | cut -d' ' -f1)"
+    rtc=$(cat /sys/class/rtc/rtc0/since_epoch 2>/dev/null)
+    now=$(date -u +%s)
+    if [ -n "$rtc" ]; then
+        d=$((now - rtc)); [ "$d" -lt 0 ] && d=$((-d))
+        [ "$d" -le 5 ] && pass "RTC matches system time" "${d}s" || fail "RTC matches system time" "off by ${d}s"
+    fi
+else
+    fail "RTC rtc0" "ls /dev/i2c-10; dmesg | grep -i rtc"
+fi
+[ -e /dev/watchdog0 ] && pass "hardware watchdog" "" || fail "hardware watchdog" "no /dev/watchdog0"
+check "I2C bus 1 (isolated)" "" test -e /dev/i2c-1
+check "I2C bus 10 (RTC)" "" test -e /dev/i2c-10
+
+# --- 9. persistence --------------------------------------------------------------------------
+check "persistent journal" "/var/log/journal missing" test -d /var/log/journal
+
+echo
+if [ "$fails" -eq 0 ]; then echo "rdebugger-selftest: all checks passed"; else echo "rdebugger-selftest: $fails check(s) failed"; fi
+[ "$fails" -eq 0 ]

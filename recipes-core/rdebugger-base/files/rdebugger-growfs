@@ -1,0 +1,59 @@
+#!/bin/sh
+# rdebugger-growfs - grow the root partition and its ext4 filesystem to the end
+# of the disk (eMMC). The image is built only slightly larger than its
+# content; this runs once, on first boot, while / is mounted:
+#   sfdisk  rewrites the MBR entry of the root partition to use all free space
+#   partx   tells the running kernel the new partition size
+#   resize2fs  grows ext4 online
+# It only ever grows the LAST partition and does nothing if less than 16 MiB
+# would be gained. A marker file stops it from running again.
+
+set -eu
+
+MARKER=/var/lib/rdebugger/growfs.done
+log() { echo "rdebugger-growfs: $*"; }
+
+# major:minor of the block device mounted at /
+majmin=$(awk '$5 == "/" { print $3; exit }' /proc/self/mountinfo)
+sysdev=/sys/dev/block/$majmin
+if [ -z "$majmin" ] || [ ! -f "$sysdev/partition" ]; then
+    log "root is not on a partition ($majmin), nothing to do"
+    exit 0
+fi
+
+partnum=$(cat "$sysdev/partition")
+part=/dev/$(basename "$(readlink -f "$sysdev")")
+disksys=$(readlink -f "$sysdev/..")
+disk=/dev/$(basename "$disksys")
+
+# Sizes in 512-byte sectors.
+disk_size=$(cat "$disksys/size")
+part_start=$(cat "$sysdev/start")
+part_size=$(cat "$sysdev/size")
+part_end=$((part_start + part_size))
+
+# Refuse if another partition starts after ours.
+for p in "$disksys"/"$(basename "$disksys")"*; do
+    [ -f "$p/start" ] || continue
+    if [ "$(cat "$p/start")" -gt "$part_start" ]; then
+        log "$part is not the last partition on $disk, not resizing"
+        exit 0
+    fi
+done
+
+free=$((disk_size - part_end))
+if [ "$free" -lt 32768 ]; then
+    log "$part already fills $disk"
+else
+    log "growing $part (partition $partnum of $disk) by $((free / 2048)) MiB"
+    # --no-reread: the disk is in use; partx below updates the kernel instead.
+    echo ", +" | sfdisk --no-reread --no-tell-kernel -N "$partnum" "$disk"
+    partx -u -n "$partnum" "$disk"
+fi
+
+# Always make the filesystem match the partition (no-op if it already does).
+resize2fs "$part"
+
+mkdir -p "$(dirname "$MARKER")"
+date -u +%Y-%m-%dT%H:%M:%SZ > "$MARKER"
+log "done"

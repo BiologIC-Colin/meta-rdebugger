@@ -1,0 +1,29 @@
+# rdebugger USB devices.
+# Rules match on every action except remove: systemd re-checks the "systemd"
+# tag on each uevent, so tagging only on "add" would drop the device unit.
+
+ACTION=="remove", GOTO="rdebugger_usb_end"
+
+# --- ST-LINK probes (V1, V2, V2-1, V3 family; ST-LINK/V2-ISOL = 0483:3748) ----
+#  - group plugdev so OpenOCD can run unprivileged;
+#  - a fixed systemd device unit, sys-subsystem-usb-devices-stlink.device,
+#    that starts rdebugger-openocd.service when the probe appears; the service
+#    BindsTo= it, so it stops when the probe goes away. One probe per station.
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="0483", \
+  ATTR{idProduct}=="3744|3748|374b|374d|374e|374f|3752|3753|3754|3755|3757", \
+  MODE="0660", GROUP="plugdev", TAG+="systemd", \
+  ENV{SYSTEMD_ALIAS}+="/sys/subsystem/usb/devices/stlink", \
+  ENV{SYSTEMD_WANTS}+="rdebugger-openocd.service"
+
+# --- FTDI USB-UART = the DUT console -------------------------------------------
+# First port -> /dev/dut-uart; further ports of FT2232/FT4232 -> /dev/dut-uart-ifNN.
+# (All USB serial ports are also in /dev/serial/by-id/.) With two FTDIs
+# attached the owner of the link is undefined: pin it with
+# ENV{ID_USB_SERIAL_SHORT}=="<serial>" in a local rule if needed.
+SUBSYSTEM!="tty", GOTO="rdebugger_usb_end"
+SUBSYSTEMS=="usb", IMPORT{builtin}="usb_id"
+ENV{ID_USB_VENDOR_ID}!="0403", GOTO="rdebugger_usb_end"
+ENV{ID_USB_INTERFACE_NUM}=="00", SYMLINK+="dut-uart"
+ENV{ID_USB_INTERFACE_NUM}=="0[1-3]", SYMLINK+="dut-uart-if$env{ID_USB_INTERFACE_NUM}"
+
+LABEL="rdebugger_usb_end"

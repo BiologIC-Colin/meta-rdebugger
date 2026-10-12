@@ -1,0 +1,8 @@
+[Unit]
+Description=Forward TCP 29536 to socketcand's local socket
+Requires=socketcand.service
+After=socketcand.service
+
+[Service]
+ExecStart=/usr/lib/systemd/systemd-socket-proxyd /run/socketcand/socketcand.sock
+DynamicUser=yes

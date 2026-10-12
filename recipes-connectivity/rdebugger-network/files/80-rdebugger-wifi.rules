@@ -1,0 +1,5 @@
+# rdebugger: start the Wi-Fi client when wlan0 appears. It only runs once Wi-Fi
+# has been provisioned (ConditionPathExists in its drop-in), and a CM4 without
+# Wi-Fi never waits for a wlan0 that will not come.
+ACTION!="remove", SUBSYSTEM=="net", KERNEL=="wlan0", TAG+="systemd", \
+  ENV{SYSTEMD_WANTS}+="wpa_supplicant-nl80211@wlan0.service"

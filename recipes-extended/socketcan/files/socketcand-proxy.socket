@@ -1,0 +1,9 @@
+[Unit]
+Description=socketcand TCP endpoint (port 29536 on all addresses)
+Documentation=https://github.com/linux-can/socketcand
+
+[Socket]
+ListenStream=29536
+
+[Install]
+WantedBy=sockets.target

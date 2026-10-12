@@ -1,0 +1,73 @@
+{
+    "description": "rdebugger remote debug station, Yocto 6.0 'wrynose'",
+    "sources": {
+        "bitbake": {
+            "git-remote": {
+                "uri": "https://git.openembedded.org/bitbake",
+                "branch": "2.18",
+                "rev": "2.18"
+            }
+        },
+        "openembedded-core": {
+            "git-remote": {
+                "uri": "https://git.openembedded.org/openembedded-core",
+                "branch": "wrynose",
+                "rev": "wrynose"
+            }
+        },
+        "meta-openembedded": {
+            "git-remote": {
+                "uri": "https://git.openembedded.org/meta-openembedded",
+                "branch": "wrynose",
+                "rev": "wrynose"
+            }
+        },
+        "meta-raspberrypi": {
+            "git-remote": {
+                "uri": "https://git.yoctoproject.org/meta-raspberrypi",
+                "branch": "wrynose",
+                "rev": "wrynose"
+            }
+        },
+        "meta-rdebugger": {
+            "git-remote": {
+                "uri": "ssh://git@github.com/BiologIC-Colin/meta-rdebugger.git",
+                "branch": "main",
+                "rev": "main"
+            }
+        }
+    },
+    "bitbake-setup": {
+        "configurations": [
+            {
+                "bb-layers": [
+                    "openembedded-core/meta",
+                    "meta-openembedded/meta-oe",
+                    "meta-raspberrypi",
+                    "meta-rdebugger"
+                ],
+                "oe-fragments": [
+                    "distro/rdebugger",
+                    "machine/waveshare-cm4-poe-4g"
+                ],
+                "configurations": [
+                    {
+                        "name": "rdebugger-dev",
+                        "description": "Development build: passwordless root on console and SSH, gdb/strace",
+                        "setup-dir-name": "rdebugger-dev",
+                        "oe-fragments": [
+                            "core/yocto/root-login-with-empty-password",
+                            "rdebugger/dev-tools"
+                        ]
+                    },
+                    {
+                        "name": "rdebugger-release",
+                        "description": "Release build: SSH keys only, no passwordless root",
+                        "setup-dir-name": "rdebugger-release"
+                    }
+                ]
+            }
+        ]
+    },
+    "version": "1.0"
+}
