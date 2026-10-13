@@ -77,7 +77,7 @@ pull-up on test pad P7 (GPIO19).
 | 5.1 | Plug in the FTDI; `ST: ls -l /dev/dut-uart /dev/serial/by-id/` | symlink to `ttyUSB0` |
 | 5.2 | `WS: nc <station> 3000` while the target prints | target output appears; typing reaches the target |
 | 5.3 | `WS: python3 -m serial.tools.miniterm rfc2217://<station>:3001 115200` | works; change baud with Ctrl-T Ctrl-B |
-| 5.4 | Second client on 3000 while the first is connected | second client takes over (kickolduser); a client on 3001 meanwhile gets `Device open failure` |
+| 5.4 | Second client on 3000 while the first is connected | second client takes over (kickolduser; the first is dropped silently); a client on 3001 meanwhile gets `Port's device already in use` |
 | 5.5 | `ST: ps \| grep [s]er2net` (with a client connected) | USER column is not root (dynamic user) |
 
 ## 6. CAN
@@ -90,7 +90,7 @@ pull-up on test pad P7 (GPIO19).
 | 6.4 | `ST: cansend can0 123#DEADBEEF` | partner receives; TX counter rises |
 | 6.5 | `WS: python-can socketcand` example from usage.md, over Ethernet and (if provisioned) Wi-Fi | frames sent and received over TCP 29536 |
 | 6.6 | Set `CAN_BITRATE="250000"`, `rdebugger-setup apply` | `ip -details link show can0` shows 250000 |
-| 6.7 | Disconnect the bus partner, send repeatedly | error counters rise, bus-off then automatic restart |
+| 6.7 | Disconnect the bus partner, send a frame | no ACK: `can state ERROR-PASSIVE` (error-warn/error-pass +1), no bus-off, frame stays queued; clear with `ip link set can0 down && ip link set can0 up`. Bus-off and `restart-ms` need bit errors (e.g. wrong bit rate on the partner) |
 
 ## 7. 1-Wire
 

@@ -124,14 +124,18 @@ flashing is a candidate for the tool layer.
 ## DUT console (ser2net)
 
 ser2net opens the UART only while a client is connected. On the same port a
-new client takes over from an old one (`kickolduser`). Ports 3000 and 3001
-share the one UART: while one is in use, a client on the other gets
-`Device open failure`.
+new client takes over from an old one (`kickolduser`); the old one is
+disconnected without a message. Ports 3000 and 3001 share the one UART: while
+one is in use, a client on the other gets `Port's device already in use` and
+is disconnected. (`Device open failure` means `/dev/dut-uart` is missing.)
 
 | Port | Protocol | Use |
 | --- | --- | --- |
-| 3000 | raw TCP | `nc`, `socat`, scripts reading logs |
-| 3001 | telnet with RFC 2217 | clients that change baud rate or control lines |
+| 3000 | raw TCP | `nc`, `socat`, PuTTY "Raw", scripts reading logs |
+| 3001 | telnet with RFC 2217 | telnet/RFC 2217 clients only (pyserial `rfc2217://`, PuTTY "Telnet"); a raw client sees the telnet negotiation bytes as garbage |
+
+Ports 3000/3001 can be unavailable for a few seconds after boot while eth0 is
+still getting its address; ser2net retries by itself.
 
 ```bash
 nc bench-07.local 3000
@@ -166,6 +170,12 @@ shared instead: set `DUT_UART_DEVICE` and run `rdebugger-setup apply`.
 
 `can0` comes up at boot at `CAN_BITRATE` (default 500 kbit/s) and restarts by
 itself 100 ms after a bus-off. The MCP2515 is classic CAN only (no CAN FD).
+
+A frame sent with no other node on the bus is never acknowledged: the
+controller keeps retrying it and goes to ERROR-PASSIVE (not bus-off, so
+`restart-ms` does not apply) until the interface is reset on the station:
+`ip link set can0 down && ip link set can0 up`. socketcand clients get no
+error report for this; check `ip -details link show can0` over SSH.
 
 On the station:
 

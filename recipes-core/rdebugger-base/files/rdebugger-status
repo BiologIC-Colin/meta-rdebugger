@@ -65,12 +65,17 @@ fi
 
 section "1-Wire"
 found=0
+phantom=0
 for d in /sys/bus/w1/devices/*; do
     [ -e "$d" ] || continue
-    case "$(basename "$d")" in w1_bus_master*) continue ;; esac
+    case "$(basename "$d")" in
+        w1_bus_master*) continue ;;
+        00-*) phantom=$((phantom + 1)); continue ;;   # family 00 = floating bus, not a device
+    esac
     printf '  %s\n' "$(basename "$d")"
     found=1
 done
+[ "$phantom" -gt 0 ] && echo "  ignored $phantom phantom family-00 ID(s): bus floating (no device or pull-up on GPIO19?)"
 [ -d /sys/bus/w1/devices ] || echo "  no 1-Wire master (w1-gpio not loaded?)"
 [ -d /sys/bus/w1/devices ] && [ "$found" = 0 ] && echo "  master present, no slaves found"
 

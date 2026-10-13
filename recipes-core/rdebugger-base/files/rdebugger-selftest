@@ -124,7 +124,12 @@ check "socketcand TCP 29536 listening" "systemctl status socketcand-proxy.socket
 # --- 7. 1-Wire ----------------------------------------------------------------------------
 if [ -d /sys/bus/w1/devices/w1_bus_master1 ]; then
     pass "1-Wire master" "w1_bus_master1"
-    slaves=$(cat /sys/bus/w1/devices/w1_bus_master1/w1_master_slaves 2>/dev/null | grep -v 'not found' | tr '\n' ' ')
+    # Family code 00 is not a real device: a floating bus (no pull-up) reads
+    # as a walking series of phantom 00-... IDs.
+    list=/sys/bus/w1/devices/w1_bus_master1/w1_master_slaves
+    slaves=$(grep -v -e 'not found' -e '^00-' "$list" 2>/dev/null | tr '\n' ' ')
+    phantoms=$(grep -c '^00-' "$list" 2>/dev/null)
+    [ "${phantoms:-0}" -gt 0 ] && info "1-Wire bus" "floating: $phantoms phantom family-00 ID(s) ignored (no device or pull-up on GPIO19?)"
     [ -n "$slaves" ] && info "1-Wire devices" "$slaves" || skip "1-Wire devices" "none on the bus"
 else
     fail "1-Wire master" "grep w1-gpio /boot/config.txt; lsmod | grep w1"

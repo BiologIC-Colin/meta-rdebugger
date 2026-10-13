@@ -39,7 +39,9 @@ Start with `rdebugger-status` and `journalctl -b -p warning`. Service logs:
 | OpenOCD: "init mode failed (unable to connect to the target)", restarting every 5 s | Target unpowered, VAPP (pin 1) not connected, wiring | Power the target, connect VAPP, check SWDIO/SWCLK/GND |
 | OpenOCD: WAIT/FAULT, DP errors | SWD too fast for the cable/isolator | `OPENOCD_ADAPTER_KHZ="950"`, `rdebugger-setup apply` |
 | GDB cannot connect from a workstation | `OPENOCD_BIND=127.0.0.1`, firewall, or wrong port | Check `ss -ltnp` on the station |
-| `nc <station> 3000` prints "Device open failure" | No FTDI (`/dev/dut-uart` missing), or the other ser2net port is in use | `ls -l /dev/dut-uart`; close the client on the other port |
+| `nc <station> 3000` prints "Device open failure" | No FTDI (`/dev/dut-uart` missing) | `ls -l /dev/dut-uart` |
+| `nc <station> 3000` prints "Port's device already in use" | A client is connected on the other ser2net port (3001) | Close that client |
+| Nothing arrives on 3000/3001 although ser2net works | The target sends nothing on the UART the FTDI is wired to (on a Nucleo-64, USART2 goes to the ST-LINK VCP, not D0/D1) | Check the wiring and which USART the firmware uses; see hardware.md |
 
 ## CAN
 
@@ -47,7 +49,8 @@ Start with `rdebugger-status` and `journalctl -b -p warning`. Service logs:
 | --- | --- | --- |
 | No `can0` | MCP2515 not probed | `dmesg | grep -i mcp251x`; check `dtoverlay=mcp2515-can0,...` in config.txt and that `kernel-module-mcp251x` is installed |
 | `networkctl` shows can0 `failed` | Unsupported option in a CAN .network file | Only BitRate/SamplePoint/RestartSec/ListenOnly/TripleSampling/Loopback on the MCP2515 |
-| `state ERROR-PASSIVE` / `BUS-OFF`, TX errors rising | No other node acknowledging, wrong bit rate, missing termination | Check bit rate on both sides; 120 Ω at each bus end (board jumper `120R`) |
+| `state ERROR-PASSIVE` / `BUS-OFF`, TX errors rising | No other node acknowledging, wrong bit rate, missing termination | Check bit rate on both sides; 120 Ω at each bus end (board jumper `120R`). With no partner the controller stays ERROR-PASSIVE with the frame queued: `ip link set can0 down && ip link set can0 up` |
+| 1-Wire shows `00-...` IDs with nothing connected | Floating bus (no device, no pull-up): family 00 is not a real device | Ignored by status/selftest; fit a 4.7 kΩ pull-up to 3.3 V when devices are attached |
 | python-can socketcand cannot connect | socketcand not running, or the proxy socket is down | `systemctl status socketcand socketcand-proxy.socket`; `ss -ltn \| grep 29536` |
 
 ## 1-Wire, RTC, Wi-Fi

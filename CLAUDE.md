@@ -38,7 +38,7 @@ touch (`docs/`). Decisions are in `docs/adr/`; follow them or propose a new ADR.
   (KNOWN_KEYS, validation, generation) + `docs/provisioning.md`, never in the image.
 - Shell scripts: `/bin/sh` is bash in this image (gensio pulls it in), but the
   utilities are busybox applets only (no `install`, no `xxd`, busybox
-  `ps`/`date`; `head`/`tail` need `-n N`, not `-N`). Write POSIX sh. Test with `dash -n`
+  `ps`/`date`; `head`/`tail` need `-n N`, not `-N`; no `head -c`, no `timeout`). Write POSIX sh. Test with `dash -n`
   and `sudo tests/test-rdebugger-setup.sh <image rootfs>`, which runs
   rdebugger-setup on the image's own busybox (qemu-user chroot). Never test only
   against the host's GNU tools.
